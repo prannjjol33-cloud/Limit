@@ -18,10 +18,15 @@ import java.util.Locale;
 public class TransactionAdapter
         extends RecyclerView.Adapter<TransactionAdapter.ViewHolder> {
 
-    private final List<Transaction> transactions;
+    public interface OnDeleteClickListener {
+        void onDelete(int position);
+    }
 
-    public TransactionAdapter(List<Transaction> transactions) {
+    private final List<Transaction> transactions;
+    private final OnDeleteClickListener deleteListener;
+    public TransactionAdapter(List<Transaction> transactions, OnDeleteClickListener deleteListener) {
         this.transactions = transactions;
+        this.deleteListener = deleteListener;
     }
 
     @NonNull
@@ -43,10 +48,11 @@ public class TransactionAdapter
                 new SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault());
         holder.tvTime.setText(sdf.format(new Date(t.timestamp)));
 
-        holder.btnDelete.setOnClickListener(v ->
-                Toast.makeText(v.getContext(),
-                        "Delete clicked (dummy)",
-                        Toast.LENGTH_SHORT).show());
+        holder.btnDelete.setOnClickListener(v -> {
+            if (deleteListener != null) {
+                deleteListener.onDelete(holder.getAdapterPosition());
+            }
+        });
     }
 
     @Override

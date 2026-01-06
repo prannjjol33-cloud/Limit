@@ -24,29 +24,81 @@ public class TransactionsActivity extends BaseActivity {
     private TransactionAdapter adapter;
     private List<Transaction> transactionList = new ArrayList<>();
 
+    private AppDatabase db;
+    private TransactionDao transactionDao;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_transactions);
-
+        db = AppDatabase.getInstance(this);
+        transactionDao = db.transactionDao();
         setupBottomNavigation();
 
         recyclerView = findViewById(R.id.recyclerTransactions);
         tvEmptyState = findViewById(R.id.tvEmptyState);
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new TransactionAdapter(transactionList);
+        adapter = new TransactionAdapter(transactionList, position -> {
+            showDeleteDialog(position);
+        });
+        recyclerView.setAdapter(adapter);
         recyclerView.setAdapter(adapter);
 
-        // dummy data (temporary)
-        transactionList.add(new Transaction(250, "Amazon", System.currentTimeMillis()));
-        transactionList.add(new Transaction(120, "Swiggy", System.currentTimeMillis()));
+        loadTransactionsFromDb();
 
         updateEmptyState();
 
         findViewById(R.id.btnAddExpense).setOnClickListener(v -> {
             showAddTransactionDialog();
         });
+    }
+
+    private void loadTransactionsFromDb() {
+        new Thread(() -> {
+            List<Transaction> list = transactionDao.getAllTransactions();
+
+            runOnUiThread(() -> {
+                transactionList.clear();
+                transactionList.addAll(list);
+                adapter.notifyDataSetChanged();
+                updateEmptyState();
+            });
+        }).start();
+    }
+
+    private void showDeleteDialog(int position) {
+
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.dialog_delete_transaction);
+        dialog.setCancelable(true);
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+        }
+
+        Button btnCancel = dialog.findViewById(R.id.cancelButton);
+        Button btnDelete = dialog.findViewById(R.id.deleteButton);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnDelete.setOnClickListener(v -> {
+            Transaction toDelete = transactionList.get(position);
+
+            new Thread(() -> {
+                transactionDao.delete(toDelete);
+
+                runOnUiThread(() -> {
+                    loadTransactionsFromDb();
+                    dialog.dismiss();
+                });
+            }).start();
+        });
+
+        dialog.show();
     }
 
     private void updateEmptyState() {
@@ -167,10 +219,14 @@ public class TransactionsActivity extends BaseActivity {
                     timestamp
             );
 
-            // 🔹 Add to list & update UI
-            transactionList.add(0, transaction);
-            adapter.notifyItemInserted(0);
-            recyclerView.scrollToPosition(0);
+            new Thread(() -> {
+                transactionDao.insert(transaction);
+
+                runOnUiThread(() -> {
+                    loadTransactionsFromDb();
+                    dialog.dismiss();
+                });
+            }).start();
 
             updateEmptyState();
             dialog.dismiss();
